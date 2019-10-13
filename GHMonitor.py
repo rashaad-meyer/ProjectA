@@ -6,6 +6,7 @@ import spidev # To communicate with SPI devices
 from numpy import interp	# To scale values
 from time import sleep	# To add delay
 import RPi.GPIO as GPIO	# To use GPIO pins
+from prettytable import PrettyTable
 # Start SPI connection
 spi = spidev.SpiDev() # Created an object
 spi.open(0,0)	
@@ -18,16 +19,22 @@ blynk = blynklib.Blynk(BLYNK_AUTH)
 output_LDR = 0.0
 output_POT = 0.0
 output_TEMP = 0.0
+output_DAC = 0
+alarm = 0
 
 localtime=0
 systime=0
 date =0
 t0=time.time()
-sampletime=2
+
+sampletime=1
 check = -1
 send_blink = True
-led_pin = 20
-i = 0
+
+monitoring = True
+
+t=PrettyTable(['RTC Time', 'Sys Timer', 'Humidity', 'Temp', 'Light', 'DAC Out', 'Alarm'])
+
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(5, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(6, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -47,6 +54,19 @@ def changeSampleTime(channel):
     print("Sample time changed to " +str(sampletime))
 
 GPIO.add_event_detect(5, GPIO.RISING, callback=changeSampleTime, bouncetime=300)
+
+def toggleMonitoring(channel):
+
+  global monitoring
+
+  if monitoring:
+    monitoring=False
+    print("Stopping monitoring")
+  else:
+    monitoring=True
+    print("Starting monitoring")
+
+GPIO.add_event_detect(6, GPIO.RISING, callback=toggleMonitoring, bouncetime=300)
 
 # Read MCP3008 data
 def analogInput(channel):
@@ -71,12 +91,13 @@ def read_virtual_pin_handler(pin):
     
     global send_blink
 
-    if (send_blink):
+    if (send_blink and monitoring):
         blynk.virtual_write(0, str(round(output_LDR,2)))
         blynk.virtual_write(1, str(round(output_POT,2)))
         blynk.virtual_write(2, str(round(output_TEMP,1)))
-        blynk.virtual_write(3, "Hello World\n")
+        blynk.virtual_write(3, t)
         send_blink = False
+
 
 while True:
     
@@ -85,7 +106,7 @@ while True:
     localtime = time.strftime("%H:%M:%S", time.gmtime(time.time()))
     systime = time.strftime("%H:%M:%S", time.gmtime(time.time()-t0))
     second = int(localtime[-2:])
-    if (second != check and second%sampletime==0):
+    if (second != check and second%sampletime==0 and monitoring):
         
         
         check = second
@@ -102,13 +123,16 @@ while True:
 
         send_blink = True
 
-        print(systime[-2:])
-        print(localtime)
-        print(systime)
-        print("Light: " + str(round(output_LDR,2)))
-        print("Humidity: " + str(round(output_POT,2)))
-        print("Temp Voltage: " + str(output_TS))
-        print("Temperature: " + str(round(output_TEMP,1))+"\n")
+        t.add_row([str(localtime), str(systime), str(round(output_LDR,2)), str(round(output_POT,2)), str(round(output_TEMP,1)),str(round(output_DAC,2)), str(alarm)])
+        print(t)
+
+        #print(systime[-2:])
+        #print(localtime)
+        #print(systime)
+        #print("Light: " + str(round(output_LDR,2)))
+        #print("Humidity: " + str(round(output_POT,2)))
+        #print("Temp Voltage: " + str(output_TS))
+        #print("Temperature: " + str(round(output_TEMP,1))+"\n")
     
 
 
