@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # Importing modules
+import blynklib
 import spidev # To communicate with SPI devices
 from numpy import interp	# To scale values
 from time import sleep	# To add delay
@@ -8,6 +9,15 @@ import RPi.GPIO as GPIO	# To use GPIO pins
 spi = spidev.SpiDev() # Created an object
 spi.open(0,0)	
 # Initializing LED pin as OUTPUT pin
+
+BLYNK_AUTH = 'TJkD0-GGNUnVzcHW7OxqzkuW1hC9P8mp' #insert your Auth Token here
+# base lib init
+blynk = blynklib.Blynk(BLYNK_AUTH)
+
+output_LDR = 0.0
+output_POT = 0.0
+output_TEMP = 0.0
+
 led_pin = 20
 i = 0
 GPIO.setmode(GPIO.BCM)
@@ -33,7 +43,16 @@ def Temp(data):
     temp = round(temp,1)
     return temp
 
+@blynk.handle_event('read V0')
+def read_virtual_pin_handler(pin):
+
+  blynk.virtual_write(0, str(round(output_LDR,2)))
+  blynk.virtual_write(1, str(round(output_POT,2)))
+  blynk.virtual_write(2, str(round(output_TEMP,1)))
+
 while True:
+    blynk.run()
+    
     output_LDR = analogInput(0) # Reading from CH0
     output_LDR = interp(output_LDR, [0, 1023], [0, 33])/10
     
