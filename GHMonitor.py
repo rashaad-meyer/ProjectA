@@ -24,7 +24,7 @@ systime=0
 date =0
 t0=time.time()
 sampletime=1
-int check = -1
+check = -1
 led_pin = 20
 i = 0
 GPIO.setmode(GPIO.BCM)
@@ -65,24 +65,28 @@ while True:
     localtime = time.strftime("%H:%M:%S", time.gmtime(time.time()))
     systime = time.strftime("%H:%M:%S", time.gmtime(time.time()-t0))
     second = int(localtime[-2:])
+    if (second != check and second%sampletime==0):
+        check = second
+        print("Seconds: " + str(check))
+        output_LDR = analogInput(0) # Reading from CH0
+        output_LDR = interp(output_LDR, [0, 1023], [0, 33])/10
+    
+        output_POT = analogInput(1) # Reading from CH1
+        output_POT = interp(output_POT, [0, 1023], [0, 33])/10
+    
+        output_TS = analogInput(2) # Reading from CH2
+        output_TS = interp(output_TS, [0, 1023], [0, 33])/10
+        output_TEMP = Temp(output_TS)
+        print(systime[-2:])
+        print(localtime)
+        print(systime)
+        print("Light: " + str(round(output_LDR,2)))
+        print("Humidity: " + str(round(output_POT,2)))
+        print("Temp Voltage: " + str(output_TS))
+        print("Temperature: " + str(round(output_TEMP,1))+"\n")
+    
 
-    output_LDR = analogInput(0) # Reading from CH0
-    output_LDR = interp(output_LDR, [0, 1023], [0, 33])/10
-    
-    output_POT = analogInput(1) # Reading from CH1
-    output_POT = interp(output_POT, [0, 1023], [0, 33])/10
-    
-    output_TS = analogInput(2) # Reading from CH2
-    output_TS = interp(output_TS, [0, 1023], [0, 33])/10
-    output_TEMP = Temp(output_TS)
-    print(systime[-2:])
-    print(localtime)
-    print(systime)
-    print("Light: " + str(round(output_LDR,2)))
-    print("Humidity: " + str(round(output_POT,2)))
-    print("Temp Voltage: " + str(output_TS))
-    print("Temperature: " + str(round(output_TEMP,1))+"\n")
 
 	#pwm.ChangeDutyCycle(output)
 
-    sleep(1)
+    #sleep(1)
