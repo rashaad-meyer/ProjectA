@@ -13,16 +13,7 @@ spi = spidev.SpiDev() # Created an object
 spi.open(0,0)	
 # Initializing LED pin as OUTPUT pin
 
-spi_max_speed = 4 * 1000000 # 4 MHz
-V_Ref = 3300 # 3V3 in mV
-Resolution = 2**10 # 10 bits for the MCP 4911
-CE = 0 # CE0 or CE1, select SPI device on bus
-
-spiDAC = spidev.SpiDev() # Created an object
-spiDAC.open(1,0)
-spiDAC.max_speed_hz = spi_max_speed
-
-BLYNK_AUTH = 'ubNS1nxz78pKy1yRPVC7EkRZzTVeGltq' #insert your Auth Token here
+BLYNK_AUTH = 'TJkD0-GGNUnVzcHW7OxqzkuW1hC9P8mp' #insert your Auth Token here
 # base lib init
 blynk = blynklib.Blynk(BLYNK_AUTH)
 
@@ -30,9 +21,11 @@ output_LDR = 0.0
 output_POT = 0.0
 output_TEMP = 0.0
 output_DAC = 0
+
 alarm = 0
 alarmtime0 = 0
 alarmtime = 0
+firstAlarm = True
 
 localtime=0
 systime=0
@@ -46,7 +39,7 @@ send_blink = True
 monitoring = True
 cleartable = False
 
-t=PrettyTable(['RTC Time', 'Sys Time', 'H', 'Temp', 'Light', 'DAC', 'Alarm'])
+t=PrettyTable(['RTC Time', 'System Time', 'Light', 'Temperature', 'Humidity', 'DAC', 'Alarm'])
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(5, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -83,12 +76,17 @@ GPIO.add_event_detect(6, GPIO.RISING, callback=toggleMonitoring, bouncetime=300)
 
 def resetCallback(channel):
   
-  global cleartable
-  global t0
+    global cleartable
+    global t0
+    global alarmtime0
+    global firstAlarm
+    global alarm
 
-  cleartable=True
-
-  t0=time.time()
+    cleartable=True
+    alarm = 0
+    t0=time.time()
+    alarmtime0 = 0
+    firstAlarm = True
   
 
 GPIO.add_event_detect(13, GPIO.RISING, callback=resetCallback, bouncetime=300)
@@ -96,25 +94,13 @@ GPIO.add_event_detect(13, GPIO.RISING, callback=resetCallback, bouncetime=300)
 def alarmResetCallback(channel):
 
     global alarm
+    if alarm == 1:
+        print("Alarm Dismissed!")
     alarm = 0
+    
 
 
 GPIO.add_event_detect(26, GPIO.RISING, callback=alarmResetCallback, bouncetime=300)
-
-def setDACOutput(val):
-    # lowbyte holds the last 6 data bits
-    out = (float(val)/3.3)*1023
-    out = round(out)
-    lowByte = out<<2
-    # highbyte holds control bits and first few data bits
-    # W  ,BUF, !GA, !SHDN,  D9,  D8,  D7,  D6
-    # B7=0:write to DAC, B6=0:unbuffered, B5=1:Gain=1X, B4=1:Output is active
-    #highByte = ((val >> 6) & 0xff) | 0b0 << 7 | 0b0 << 6 | 0b1 << 5 | 0b1 << 4
-    highByte = 0b00110000|(out>>6)
-    # by using spi.xfer2(), the CS is released after each block, transferring the
-    # value to the output pin.
-    #print("setDACOutput called " + str(val))
-    spiDAC.xfer2([highByte, lowByte])
 
 # Read MCP3008 data
 def analogInput(channel):
@@ -155,7 +141,6 @@ def read_virtual_pin_handler(pin):
 while True:
     
     blynk.run()
-    setDACOutput(2.7)
     if cleartable:
         t.clear_rows()
         cleartable=False
@@ -173,8 +158,8 @@ while True:
     if (second != check and second%sampletime==0 and monitoring):
         
         check = second
-        print(str(alarmtime_hour) + str(alarmtime_minute) + str(alarmtime_second))
-        print( str(output_DAC) + "; Alarm:" + str(alarm))
+        #print(str(alarmtime_hour) + str(alarmtime_minute) + str(alarmtime_second))
+        #print( str(output_DAC) + "; Alarm:" + str(alarm))
         output_LDR = analogInput(0) # Reading from CH0
     
         output_POT = analogInput(1) # Reading from CH1
@@ -186,14 +171,15 @@ while True:
 
         output_DAC = (output_LDR/1023)*output_POT
 
-        if ((output_DAC>2.65 or output_DAC<0.65) and (alarmtime_minute>=3 or alarmtime_hour>=1)):
+        if ((output_DAC>2.65 or output_DAC<0.65) and (alarmtime_minute>=3 or alarmtime_hour>=1)) or ((output_DAC>2.65 or output_DAC<0.65) and firstAlarm):
             alarm = 1
             alarmtime0 = time.time()
+            firstAlarm = False
 
         send_blink = True
 
         t.add_row([str(localtime), str(systime), str(round(output_LDR,2)), str(round(output_POT,2)), str(round(output_TEMP,1)),str(round(output_DAC,2)), str(alarm)])
-        #print(t)
+        print(t)
 
         #print(systime[-2:])
         #print(localtime)
