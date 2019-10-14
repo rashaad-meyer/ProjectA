@@ -13,7 +13,16 @@ spi = spidev.SpiDev() # Created an object
 spi.open(0,0)	
 # Initializing LED pin as OUTPUT pin
 
-BLYNK_AUTH = 'TJkD0-GGNUnVzcHW7OxqzkuW1hC9P8mp' #insert your Auth Token here
+spi_max_speed = 4 * 1000000 # 4 MHz
+V_Ref = 3300 # 3V3 in mV
+Resolution = 2**10 # 10 bits for the MCP 4911
+CE = 0 # CE0 or CE1, select SPI device on bus
+
+spiDAC = spidev.SpiDev() # Created an object
+spiDAC.open(1,0)
+spiDAC.max_speed_hz = spi_max_speed
+
+BLYNK_AUTH = 'ubNS1nxz78pKy1yRPVC7EkRZzTVeGltq' #insert your Auth Token here
 # base lib init
 blynk = blynklib.Blynk(BLYNK_AUTH)
 
@@ -92,6 +101,21 @@ def alarmResetCallback(channel):
 
 GPIO.add_event_detect(26, GPIO.RISING, callback=alarmResetCallback, bouncetime=300)
 
+def setDACOutput(val):
+    # lowbyte holds the last 6 data bits
+    out = (float(val)/3.3)*1023
+    out = round(out)
+    lowByte = out<<2
+    # highbyte holds control bits and first few data bits
+    # W  ,BUF, !GA, !SHDN,  D9,  D8,  D7,  D6
+    # B7=0:write to DAC, B6=0:unbuffered, B5=1:Gain=1X, B4=1:Output is active
+    #highByte = ((val >> 6) & 0xff) | 0b0 << 7 | 0b0 << 6 | 0b1 << 5 | 0b1 << 4
+    highByte = 0b00110000|(out>>6)
+    # by using spi.xfer2(), the CS is released after each block, transferring the
+    # value to the output pin.
+    #print("setDACOutput called " + str(val))
+    spiDAC.xfer2([highByte, lowByte])
+
 # Read MCP3008 data
 def analogInput(channel):
     spi.max_speed_hz = 1350000
@@ -124,13 +148,14 @@ def read_virtual_pin_handler(pin):
         blynk.virtual_write(1, str(round(output_POT,2)))
         blynk.virtual_write(2, str(round(output_TEMP,1)))
         blynk.virtual_write(3, systime)
+        blynk.virtual_write(4, alarm*255)
         send_blink = False
 
 
 while True:
     
     blynk.run()
-    
+    setDACOutput(2.7)
     if cleartable:
         t.clear_rows()
         cleartable=False
